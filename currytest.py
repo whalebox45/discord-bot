@@ -1,5 +1,3 @@
-from email.policy import default
-from logging import exception
 import os
 from dotenv import load_dotenv
 
