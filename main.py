@@ -15,27 +15,6 @@ keyword_data = json.load(keyword_file)
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 
-
-
-
-'''
-client = discord.Client()
-
-@client.event
-async def on_ready():
-    print(f'{client.user} has connected to Discord!')
-
-@client.event
-async def on_message(message):
-    if message.author == client.user:
-        return
-
-    if '你好機器人' in message.content:
-        await message.channel.send('嗶嗶，我是機器人，機油好難喝')
-'''
-
-
-
 bot = commands.Bot(command_prefix='/')
 
 @bot.command()

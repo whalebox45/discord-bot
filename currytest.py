@@ -1,84 +1,63 @@
+from email.policy import default
+from logging import exception
 import os
-import asyncio
-
 from dotenv import load_dotenv
 
-import sqlite3
-
-import discord
-from discord.ext import commands
+import interactions
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 
-conn = sqlite3.connect('memo.db')
-cursor = conn.cursor()
-
-bot = commands.Bot(command_prefix='/')
-
-@bot.command()
-async def test(ctx, arg):
-    await ctx.send(arg)
-
-@bot.command()
-async def memo(ctx, arg):
-
-    if arg =='add':
-        await ctx.send(str(ctx.author) + " 你要寫些什麼？（50字以內）")
-
-        def check(m):
-            return (
-                m.author == ctx.author and
-                m.channel.id == ctx.channel.id
-                )
-
-        try:
-            note = await bot.wait_for('message',timeout=300.0,check=check)
-        except asyncio.TimeoutError:
-            await ctx.send('太久了，先不幫你存了')
-        except:
-            await ctx.send('出了點狀況，沒辦法幫你存')
-        else:
-            await ctx.send("知道了，所以要幫你把這句話存下來嗎？(Y/n): "+ note.content)
-            try: 
-                msg = await bot.wait_for('message', timeout=30.0,check=check)
-            except asyncio.TimeoutError:
-                await ctx.send('太久了，先不幫你存了')
-            except:
-                await ctx.send('出了點狀況，沒辦法幫你存')
-            else:
-                if msg.content.lower() in ("y","yes"):
-                    await ctx.send('那麼我就幫你把這句話存下來囉！')
-                    print(",".join([str(note.author.id), str(note.channel.id), note.content]))
-                    cursor.execute('insert into "main"."memo"(user_id,channel_id,note) values(?, ?, ?)',
-                        (note.author.id, note.channel.id, note.content))
-                    conn.commit()
-                else:
-                    await ctx.send('那我就不幫你存了')
-
-        finally:
-            del note, msg
-    
-    if arg == 'show':
-        await ctx.send(str(ctx.author) + " 你好，這是你存過的備忘錄")
-
-        cursor.execute('select note from "main"."memo" where user_id = ? and channel_id = ?',
-            (ctx.author.id, ctx.channel.id))
-
-        notelist = [x[0] for x in cursor.fetchall()]
-
-        notestr = ''
-        for index in range(len(notelist)):
-            notestr += f'[{index+1:>{len(str(len(notelist)))}}] {notelist[index]}\n'
-
-        embed = discord.Embed(title=" ")
-        embed.add_field(name="備忘錄",value='`'+notestr+'`')
-
-        await ctx.send(embed=embed)
-
-    
+bot = interactions.Client(token=TOKEN,default_scope=False)
 
 
+@bot.command(
+    name="my_first_command",
+    description="This is the first command I made!",
+)
+async def my_first_command(ctx: interactions.CommandContext):
+    await ctx.send("Hi there!")
 
 
-bot.run(TOKEN)
+@bot.command(
+    name="base_command",
+    description="This description isn't seen in UI (yet?)",
+    options=[
+        interactions.Option(
+            name="command_name",
+            description="A descriptive description",
+            type=interactions.OptionType.SUB_COMMAND,
+            options=[
+                interactions.Option(
+                    name="option",
+                    description="A descriptive description",
+                    type=interactions.OptionType.INTEGER,
+                    required=False,
+                ),
+            ],
+        ),
+        interactions.Option(
+            name="second_command",
+            description="A descriptive description",
+            type=interactions.OptionType.SUB_COMMAND,
+            options=[
+                interactions.Option(
+                    name="second_option",
+                    description="A descriptive description",
+                    type=interactions.OptionType.STRING,
+                    required=True,
+                ),
+            ],
+        ),
+    ],
+)
+async def cmd(ctx: interactions.CommandContext, sub_command: str, second_option: str = "", option: int = None):
+    if sub_command == "command_name":
+      await ctx.send(f"You selected the command_name sub command and put in {option}")
+    elif sub_command == "second_command":
+      await ctx.send(f"You selected the second_command sub command and put in {second_option}")
+
+try:
+    bot.start()
+except KeyboardInterrupt:
+    exit(1)
