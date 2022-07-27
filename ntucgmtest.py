@@ -52,6 +52,7 @@ async def win_deck(ctx: interactions.CommandContext):
         
         
     await ctx.send('```\n'+option_str+'\n```',components=week_menu)
+    del webdata, soup, sel, a, option_str, week_menu
     
 
 @bot.component("week_select")
@@ -79,7 +80,7 @@ async def week(ctx, value):
 
 
     await ctx.send('```\n'+str(b)+'\n```')
-
+    del webdata, soup,sel, regex, b, rs
 
 
 
