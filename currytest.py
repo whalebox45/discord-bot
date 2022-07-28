@@ -46,13 +46,9 @@ async def win_deck(ctx: interactions.CommandContext):
              for x in a[:9]    
             ],
         custom_id="week_select",
-    )
-
-    
-        
+    )    
         
     await ctx.send('```\n'+option_str+'\n```',components=week_menu)
-    del webdata, soup, sel, a, option_str, week_menu
     
 
 @bot.component("week_select")
@@ -77,11 +73,7 @@ async def week(ctx, value):
         if rs is not None:
             b+=str(rs.group(0)) + '\n'
 
-
-
     await ctx.send('```\n'+str(b)+'\n```')
-    del webdata, soup,sel, regex, b, rs
-
 
 
 bot.start()
