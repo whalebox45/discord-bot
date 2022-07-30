@@ -15,7 +15,7 @@ bot = interactions.Client(token=TOKEN, default_scope=False)
 
 @bot.command(
     name="win_deck",
-    description="顯示每周牌組餅圖與比例"
+    description="顯示每周台大卡牌研究社遊戲王上位餅圖與比例"
 )
 async def win_deck(ctx: interactions.CommandContext):
     await ctx.send("請問你要選哪一個時段的上位餅圖？")
@@ -74,6 +74,11 @@ async def week(ctx, value):
             b+=str(rs.group(0)) + '\n'
 
     await ctx.send('```\n'+str(b)+'\n```')
+
+@bot.command("my_deck")
+async def my_deck(ctx: interactions.CommandContext):
+    pass
+
 
 
 bot.start()
