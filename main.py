@@ -1,4 +1,6 @@
+import html
 import os
+from pydoc import describe
 from dotenv import load_dotenv
 
 import interactions
@@ -10,7 +12,7 @@ import re
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 
-bot = interactions.Client(token=TOKEN, default_scope=False)
+bot = interactions.Client(token=TOKEN)
 
 
 @bot.command(
@@ -75,18 +77,6 @@ async def week(ctx, value):
 
     await ctx.send('```\n'+str(b)+'\n```')
 
-@bot.command(
-    name="card_find",
-    description="依據卡號、密碼或名稱查詢相關資料",
-    options=[
-        interactions.Option(
-            name="card_id",
-            description="根據卡號查詢",
-
-        )
-    ]
-)
-async def card_find(ctx: interactions.CommandContext):
 
 
 
