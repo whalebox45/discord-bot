@@ -75,9 +75,18 @@ async def week(ctx, value):
 
     await ctx.send('```\n'+str(b)+'\n```')
 
-@bot.command("my_deck")
-async def my_deck(ctx: interactions.CommandContext):
-    pass
+@bot.command(
+    name="card_find",
+    description="依據卡號、密碼或名稱查詢相關資料",
+    options=[
+        interactions.Option(
+            name="card_id",
+            description="根據卡號查詢",
+
+        )
+    ]
+)
+async def card_find(ctx: interactions.CommandContext):
 
 
 
