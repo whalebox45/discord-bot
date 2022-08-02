@@ -10,6 +10,8 @@ from bs4 import BeautifulSoup
 
 import re
 
+import kill
+
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 
@@ -155,9 +157,5 @@ async def deletedeck(ctx: interactions.CommandContext):
     await ctx.send('delete my_deck')
 
 
-@bot.command()
-async def kill(ctx):
-    await ctx.send('bye')
-    exit(1)
 
 bot.start()
