@@ -83,6 +83,9 @@ async def listdeck(ctx: interactions.CommandContext):
     await ctx.send('list my_deck')
 
 
+
+
+
 @my_deck.subcommand(name='create',description="輸入ydk內容以建立牌組")
 async def createdeck(ctx: interactions.CommandContext):
     test = 1
@@ -111,20 +114,25 @@ async def createdeck(ctx: interactions.CommandContext):
         )
         await ctx.popup(modal)
 
+
+
+
+
+
 @bot.modal("makedeck_form")
 async def makedeck_response(ctx: interactions.CommandContext,ydk_title: str, ydk_data:str):
 
     def deck_data(data):
         return 0
 
-        
+
     deck_data(ydk_data)
 
     ebd = interactions.Embed(
         title=ydk_title,
         fields=[interactions.EmbedField(
-            name='field',
-            value='123',
+            name='牌組',
+            value=ydk_data,
             inline=True,
         )]
     )
