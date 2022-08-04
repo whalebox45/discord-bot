@@ -3,3 +3,5 @@ venv*/
 ./*.csv
 ./*.db
 __pycache__/
+*.db-journal
+userdeck.db
