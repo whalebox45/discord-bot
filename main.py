@@ -1,6 +1,4 @@
-import html
 import os
-from pydoc import describe
 from dotenv import load_dotenv
 
 import interactions
@@ -9,8 +7,6 @@ from bs4 import BeautifulSoup
 
 import re
 import base64
-
-import hashlib
 
 import sqlite3
 import psycopg2
