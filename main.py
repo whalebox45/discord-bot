@@ -1,5 +1,4 @@
 import html
-from msilib.schema import Component
 import os
 from pydoc import describe
 from dotenv import load_dotenv
@@ -14,11 +13,13 @@ import base64
 import hashlib
 
 import sqlite3
+import psycopg2
 
 
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
+DB_URL = os.getenv('DATABASE_URL')
 
 bot = interactions.Client(token=TOKEN)
 
@@ -95,6 +96,7 @@ async def my_deck(ctx: interactions.CommandContext):
 
 @my_deck.subcommand(name="list",description="檢視在機器人上已儲存的牌組")
 async def listdeck(ctx: interactions.CommandContext):
+    
     await ctx.send('list my_deck')
 
 
@@ -103,8 +105,23 @@ async def listdeck(ctx: interactions.CommandContext):
 
 @my_deck.subcommand(name='create',description="輸入ydk內容以建立牌組")
 async def createdeck(ctx: interactions.CommandContext):
-    test = 1
-    if test > 2:
+
+    MAX_DECK_COUNT = 5
+
+    conn = psycopg2.connect(DB_URL)
+
+    cur = conn.cursor()
+
+    
+    cur.execute("""select count(*) from userdeck where user_id = %s """,(int(ctx.user.id),))
+    
+    fetch = cur.fetchone()
+    conn.close()
+
+    deck_count = fetch[0]
+    
+
+    if deck_count > MAX_DECK_COUNT:
         await ctx.send("你已儲存太多的牌組了",ephemeral=True)
     else:
         decktitle = interactions.TextInput(
@@ -237,18 +254,19 @@ async def makedeck_response(ctx: interactions.CommandContext,ydk_title: str, ydk
             
         b64_deck = base64.b64encode(bytes(save_data,'ascii'))
 
-        conn = sqlite3.connect('decks/userdeck.db')
+        conn = psycopg2.connect(DB_URL)
 
         cur = conn.cursor()
-        cur.execute("insert into UserDeck(UserID,DeckName,DeckB64Data) values(?,?,?)",(
-            hashlib.sha256(str(ctx.user.id).encode('ascii')).hexdigest()
-        ,ydk_title,b64_deck))
+
+        
+        cur.execute("""insert into userdeck(user_id,deck_name,deck_data) values(%s,%s,%s);""",
+        (int(ctx.user.id),ydk_title,b64_deck))
         conn.commit()
 
         conn.close()
 
         # print(save_data)
-        print(b64_deck)
+        # print(b64_deck)
         
 
         await ctx.edit(components=interactions.ActionRow(

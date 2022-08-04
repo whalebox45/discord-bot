@@ -1,0 +1,4 @@
+sqlite:
+create table userdeck(user_id integer, deck_name text, deck_data text, id integer primary key autoincrement);
+postgres:
+create table userdeck(user_id decimal not null, deck_name varchar(100), deck_data varchar(3000), id serial primary key);
