@@ -19,6 +19,28 @@ DB_URL = os.getenv('DATABASE_URL')
 
 bot = interactions.Client(token=TOKEN)
 
+# 各個牌組區的最大張數
+MAINDECK_MAX = 60
+EXTRADECK_MAX = 15
+SIDEDECK_MAX = 15
+
+# 從ydk檔抓取表頭、牌組區名稱、張數限制
+DECK_DICT = {
+    'main':{
+        'attr': '#main',
+        'maxcard': MAINDECK_MAX,
+        'name': "主牌組"},
+    'extra':{
+        'attr': '#extra',
+        'maxcard': EXTRADECK_MAX,
+        'name': "額外牌組"},
+    'side':{
+        'attr': '!side',
+        'maxcard': SIDEDECK_MAX,
+        'name': "備用牌組"}
+}
+
+
 @interactions.autodefer(delay=20)
 @bot.command(
     name="win_deck",
@@ -58,10 +80,6 @@ async def win_deck(ctx: interactions.CommandContext):
     await ctx.send("請問你要選哪一個時段的上位餅圖？")
     await ctx.send('```\n'+option_str+'\n```',components=week_menu)
 
-@bot.command()
-async def test(ctx):
-    await ctx.send("hi")    
-
 @bot.component("week_select")
 async def week(ctx, value):
 
@@ -90,16 +108,109 @@ async def week(ctx, value):
 async def my_deck(ctx: interactions.CommandContext):
     pass
 
-@my_deck.subcommand(name="list",description="檢視在機器人上已儲存的牌組")
+@my_deck.subcommand(name="list",description="檢視在機器人上已儲存的牌組(Beta)")
 async def listdeck(ctx: interactions.CommandContext):
-    
-    await ctx.send('list my_deck')
+    conn = psycopg2.connect(DB_URL)
+    cur = conn.cursor()
+
+    cur.execute("""select id, user_id, deck_name from userdeck where user_id = %s ;""",(int(ctx.user.id),))
+    fetch = cur.fetchall()
+    conn.close()
+
+    option_str = ""
+    for x in fetch:
+        option_str += str(fetch.index(x)+1) + ': ' + fetch[2] + '\n'
+
+    deck_menu = interactions.SelectMenu(
+        options=[
+            interactions.SelectOption(
+                label=str(fetch.index(x)+1) + ': ' + str(fetch[2])
+                value=x[0],
+            )
+            for x in fetch
+        ],
+        custom_id="deck_delect"
+    )
+
+    await ctx.send('請選擇以儲存的牌組')
+    await ctx.send('```\n'+option_str+'\n```', components=deck_menu)
+
+@bot.component("deck_select")
+async def deck_select(ctx, value):
+    conn = psycopg2.connect(DB_URL)
+    cur = conn.cursor()
+
+    cur.execute(""" select id, deck_data, deck_name from userdeck where id = %s ;""",(value,))
+    fetch = cur.fetchone()
+
+    conn.close()
+
+    b64_deck_bytes = fetch[1].encode('ascii')
+    load_data_bytes = base64.b64decode(b64_deck_bytes)
+    load_data = load_data_bytes.decode('ascii')
+
+    ydk_title = fetch[2]
+
+    def get_deck_display_str(decktype: dict):
+        data_list = load_data.splitlines()
+
+        conn = sqlite3.connect("decks/card.db")
+        output_str = ''
+        # 從表頭區判斷資料行號，抓取最大數量以內的卡牌密碼
+        
+        card_bucket = {}
+
+        for x in range(
+            data_list.index(decktype['attr']) + 1,
+            data_list.index(decktype['attr']) + decktype['maxcard'] +  1):
+            
+            # 當遇到非數字則忽略、表頭符號則結束
+            if '#' in data_list[x] or '!' in data_list[x]: break
+            elif not data_list[x].isnumeric(): continue
+
+            if data_list[x] not in card_bucket:
+                card_bucket[data_list[x]] = 1
+            else:
+                card_bucket[data_list[x]] += 1
+
+        card_bucket = dict(sorted(card_bucket.items()))
+
+        for cid in card_bucket:
+            # 從資料庫查找卡名
+            cur = conn.cursor()
+            cur.execute("select CardName from Cards \
+                where Passcode=(?) limit 1",("%08d"%int(cid),))
+            fetch = cur.fetchone()
+
+            cardname = "??"
+
+            if fetch != None: cardname = str(fetch[0])
+
+            # 串接連續字串
+            output_str += f'{"%08d"%int(cid)}: {cardname} * {card_bucket[cid]}\n'
+        
+        
+        conn.close()
+        #回傳連續字串
+        return output_str
+
+    embed_content = [interactions.EmbedField(
+        name = DECK_DICT[d]['name'],
+        value = get_deck_display_str(DECK_DICT[d]),
+        inline = False,
+    ) for d in DECK_DICT]
+
+
+    ebd = interactions.Embed(
+        title=ydk_title,
+        fields=embed_content,
+    )
+
+    await ctx.send(content="這是你所要檢視的牌組",embeds=ebd)
 
 
 
-
-
-@my_deck.subcommand(name='create',description="輸入ydk內容以建立牌組")
+@my_deck.subcommand(name='create',description="輸入ydk內容以建立牌組(Beta)")
 async def createdeck(ctx: interactions.CommandContext):
 
     MAX_DECK_COUNT = 5
@@ -143,8 +254,16 @@ async def createdeck(ctx: interactions.CommandContext):
         await ctx.popup(modal)
 
 
-
-
+btn_nosave = interactions.Button(
+    style=interactions.ButtonStyle.SECONDARY,
+    label='否',
+    custom_id="nosavedeck",
+)
+btn_save = interactions.Button(
+    style=interactions.ButtonStyle.PRIMARY,
+    label="是",
+    custom_id="savedeck",
+)
 
 
 @bot.modal("makedeck_form")
@@ -152,26 +271,7 @@ async def makedeck_response(ctx: interactions.CommandContext,ydk_title: str, ydk
 
     if ydk_title == "": ydk_title = "Unnamed"
 
-    # 各個牌組區的最大張數
-    MAINDECK_MAX = 60
-    EXTRADECK_MAX = 15
-    SIDEDECK_MAX = 15
-
-    # 從ydk檔抓取表頭
-    DECK_DICT = {
-        'main':{
-            'attr': '#main',
-            'maxcard': MAINDECK_MAX,
-            'name': "主牌組"},
-        'extra':{
-            'attr': '#extra',
-            'maxcard': EXTRADECK_MAX,
-            'name': "額外牌組"},
-        'side':{
-            'attr': '!side',
-            'maxcard': SIDEDECK_MAX,
-            'name': "備用牌組"}
-    }
+    
 
     
 
@@ -248,7 +348,10 @@ async def makedeck_response(ctx: interactions.CommandContext,ydk_title: str, ydk
                 # 串接連續字串
                 save_data += f'{data_list[x]}'
             
-        b64_deck = base64.b64encode(bytes(save_data,'ascii'))
+
+        save_data_bytes = save_data.encode('ascii')
+        b64_bytes = base64.b64encode(save_data_bytes)
+        b64_deck = b64_bytes.decode('ascii')
 
         conn = psycopg2.connect(DB_URL)
 
@@ -323,27 +426,13 @@ async def makedeck_response(ctx: interactions.CommandContext,ydk_title: str, ydk
 
     await ctx.send(content="這是你建立的牌組，請問要儲存嗎？",embeds=ebd,components=btn_row, ephemeral=True)
 
-btn_nosave = interactions.Button(
-    style=interactions.ButtonStyle.SECONDARY,
-    label='否',
-    custom_id="nosavedeck",
-)
-btn_save = interactions.Button(
-    style=interactions.ButtonStyle.PRIMARY,
-    label="是",
-    custom_id="savedeck",
-)
 
 
-
-
-@my_deck.subcommand(name='modify')
-async def updatedeck(ctx: interactions.CommandContext):
-    await ctx.send('update my_deck')
 
 @my_deck.subcommand(name='delete')
 async def deletedeck(ctx: interactions.CommandContext):
-    await ctx.send('delete my_deck')
+    await ctx.send('還沒寫，欲刪除請洽機器人作者')
+    
 
 
 @bot.command()
