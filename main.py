@@ -175,12 +175,12 @@ async def listdeck(ctx: interactions.CommandContext):
 
         option_str = ""
         for i, x in enumerate(fetch):
-            option_str += str(i) + ': ' + str(x[2]) + '\n'
+            option_str += str(i+1) + ': ' + str(x[2]) + '\n'
 
         deck_menu = interactions.SelectMenu(
             options=[
                 interactions.SelectOption(
-                    label= str(x[0]) + ': ' + str(x[2]),
+                    label= str(i+1) + ': ' + str(x[2]),
                     value=x[0],
                 )
                 for i, x in enumerate(fetch)
