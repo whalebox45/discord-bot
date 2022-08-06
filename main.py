@@ -174,8 +174,8 @@ async def listdeck(ctx: interactions.CommandContext):
         if not fetch: raise DeckEmptyError
 
         option_str = ""
-        for x in fetch:
-            option_str += str(x[0]) + ': ' + str(x[2]) + '\n'
+        for i, x in enumerate(fetch):
+            option_str += str(i) + ': ' + str(x[2]) + '\n'
 
         deck_menu = interactions.SelectMenu(
             options=[
@@ -183,7 +183,7 @@ async def listdeck(ctx: interactions.CommandContext):
                     label= str(x[0]) + ': ' + str(x[2]),
                     value=x[0],
                 )
-                for x in fetch
+                for i, x in enumerate(fetch)
             ],
             custom_id="deck_select"
         )
