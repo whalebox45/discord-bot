@@ -266,7 +266,7 @@ async def createdeck(ctx: interactions.CommandContext):
             max_length=1000,
         )
         modal = interactions.Modal(
-            title="input",
+            title="建立牌組",
             custom_id='makedeck_form',
             components=[decktitle,deckinput]
         )
