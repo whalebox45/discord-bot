@@ -17,6 +17,8 @@ load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 DB_URL = os.getenv('DATABASE_URL')
 
+CARD_DB_LOCATION = "decks/card.db"
+
 bot = interactions.Client(token=TOKEN)
 
 # 各個牌組區的最大張數
@@ -102,6 +104,53 @@ async def week(ctx, value):
     await ctx.send(str(value[0])+'\n```\n'+str(b)+'\n```')
 
 
+def get_deck_display_str(decktype: dict, deck_data: str):
+
+    data_list = deck_data.splitlines()
+
+    conn = sqlite3.connect(CARD_DB_LOCATION)
+    output_str = ''
+    # 從表頭區判斷資料行號，抓取最大數量以內的卡牌密碼
+    
+    card_bucket = {}
+
+    for x in range(
+        data_list.index(decktype['attr']) + 1,
+        data_list.index(decktype['attr']) + decktype['maxcard'] +  1):
+        
+        # 當遇到非數字則忽略、表頭符號則結束
+        if '#' in data_list[x] or '!' in data_list[x]: break
+        elif not data_list[x].isnumeric(): continue
+
+        if data_list[x] not in card_bucket:
+            card_bucket[data_list[x]] = 1
+        else:
+            card_bucket[data_list[x]] += 1
+
+    card_bucket = dict(sorted(card_bucket.items()))
+
+    for cid in card_bucket:
+        # 從資料庫查找卡名
+        cur = conn.cursor()
+        cur.execute("select CardName from Cards \
+            where Passcode=(?) limit 1",("%08d"%int(cid),))
+        fetch = cur.fetchone()
+
+        cardname = "??"
+
+        if fetch != None: cardname = str(fetch[0])
+
+        # 串接連續字串
+        output_str += f'{"%08d"%int(cid)}: {cardname} * {card_bucket[cid]}\n'
+    
+    
+    conn.close()
+    #回傳連續字串
+    return output_str
+
+
+
+
 
 
 @bot.command(name='my_deck')
@@ -110,40 +159,51 @@ async def my_deck(ctx: interactions.CommandContext):
 
 @my_deck.subcommand(name="list",description="檢視在機器人上已儲存的牌組(Beta)")
 async def listdeck(ctx: interactions.CommandContext):
+
+    class DeckEmptyError(Exception):
+        pass
+
     conn = psycopg2.connect(DB_URL)
     cur = conn.cursor()
 
     cur.execute("""select id, user_id, deck_name from userdeck where user_id = %s ;""",(int(ctx.user.id),))
-    fetch = cur.fetchall()
-    conn.close()
+    try:
+        fetch = cur.fetchall()
+        conn.close()
+        
+        if not fetch: raise DeckEmptyError
 
-    option_str = ""
-    for x in fetch:
-        option_str += str(fetch.index(x)+1) + ': ' + fetch[2] + '\n'
+        option_str = ""
+        for x in fetch:
+            option_str += str(x[0]) + ': ' + str(x[2]) + '\n'
 
-    deck_menu = interactions.SelectMenu(
-        options=[
-            interactions.SelectOption(
-                label=str(fetch.index(x)+1) + ': ' + str(fetch[2])
-                value=x[0],
-            )
-            for x in fetch
-        ],
-        custom_id="deck_delect"
-    )
+        deck_menu = interactions.SelectMenu(
+            options=[
+                interactions.SelectOption(
+                    label= str(x[0]) + ': ' + str(x[2]),
+                    value=x[0],
+                )
+                for x in fetch
+            ],
+            custom_id="deck_select"
+        )
 
-    await ctx.send('請選擇以儲存的牌組')
-    await ctx.send('```\n'+option_str+'\n```', components=deck_menu)
+        await ctx.send('請選擇已儲存的牌組')
+        await ctx.send('```\n'+option_str+'\n```', components=deck_menu)
+    except DeckEmptyError:
+        await ctx.send('你沒有存任何牌組喔')
 
 @bot.component("deck_select")
 async def deck_select(ctx, value):
     conn = psycopg2.connect(DB_URL)
     cur = conn.cursor()
 
-    cur.execute(""" select id, deck_data, deck_name from userdeck where id = %s ;""",(value,))
+    cur.execute(""" select id, deck_data, deck_name from userdeck where id = %s ;""",(str(value[0]),))
     fetch = cur.fetchone()
 
     conn.close()
+
+    print(fetch)
 
     b64_deck_bytes = fetch[1].encode('ascii')
     load_data_bytes = base64.b64decode(b64_deck_bytes)
@@ -151,52 +211,9 @@ async def deck_select(ctx, value):
 
     ydk_title = fetch[2]
 
-    def get_deck_display_str(decktype: dict):
-        data_list = load_data.splitlines()
-
-        conn = sqlite3.connect("decks/card.db")
-        output_str = ''
-        # 從表頭區判斷資料行號，抓取最大數量以內的卡牌密碼
-        
-        card_bucket = {}
-
-        for x in range(
-            data_list.index(decktype['attr']) + 1,
-            data_list.index(decktype['attr']) + decktype['maxcard'] +  1):
-            
-            # 當遇到非數字則忽略、表頭符號則結束
-            if '#' in data_list[x] or '!' in data_list[x]: break
-            elif not data_list[x].isnumeric(): continue
-
-            if data_list[x] not in card_bucket:
-                card_bucket[data_list[x]] = 1
-            else:
-                card_bucket[data_list[x]] += 1
-
-        card_bucket = dict(sorted(card_bucket.items()))
-
-        for cid in card_bucket:
-            # 從資料庫查找卡名
-            cur = conn.cursor()
-            cur.execute("select CardName from Cards \
-                where Passcode=(?) limit 1",("%08d"%int(cid),))
-            fetch = cur.fetchone()
-
-            cardname = "??"
-
-            if fetch != None: cardname = str(fetch[0])
-
-            # 串接連續字串
-            output_str += f'{"%08d"%int(cid)}: {cardname} * {card_bucket[cid]}\n'
-        
-        
-        conn.close()
-        #回傳連續字串
-        return output_str
-
     embed_content = [interactions.EmbedField(
         name = DECK_DICT[d]['name'],
-        value = get_deck_display_str(DECK_DICT[d]),
+        value = get_deck_display_str(DECK_DICT[d],load_data),
         inline = False,
     ) for d in DECK_DICT]
 
@@ -213,6 +230,9 @@ async def deck_select(ctx, value):
 @my_deck.subcommand(name='create',description="輸入ydk內容以建立牌組(Beta)")
 async def createdeck(ctx: interactions.CommandContext):
 
+    class DeckOutOfLimitError(Exception):
+        pass
+
     MAX_DECK_COUNT = 5
 
     conn = psycopg2.connect(DB_URL)
@@ -227,10 +247,9 @@ async def createdeck(ctx: interactions.CommandContext):
 
     deck_count = fetch[0]
     
-
-    if deck_count > MAX_DECK_COUNT:
-        await ctx.send("你已儲存太多的牌組了",ephemeral=True)
-    else:
+    try:
+        if deck_count > MAX_DECK_COUNT: raise DeckOutOfLimitError
+            
         decktitle = interactions.TextInput(
             style=interactions.TextStyleType.SHORT,
             label='牌組名稱',
@@ -252,7 +271,9 @@ async def createdeck(ctx: interactions.CommandContext):
             components=[decktitle,deckinput]
         )
         await ctx.popup(modal)
-
+    except DeckOutOfLimitError:
+        print("too many decks")
+        await ctx.send("你已儲存太多的牌組了",ephemeral=True)
 
 btn_nosave = interactions.Button(
     style=interactions.ButtonStyle.SECONDARY,
@@ -270,60 +291,12 @@ btn_save = interactions.Button(
 async def makedeck_response(ctx: interactions.CommandContext,ydk_title: str, ydk_data:str):
 
     if ydk_title == "": ydk_title = "Unnamed"
-
-    
-
-    
-
-    def get_deck_display_str(decktype):
-        data_list = ydk_data.splitlines()
-
-        conn = sqlite3.connect("decks/card.db")
-        output_str = ''
-        # 從表頭區判斷資料行號，抓取最大數量以內的卡牌密碼
-        
-        card_bucket = {}
-
-        for x in range(
-            data_list.index(decktype['attr']) + 1,
-            data_list.index(decktype['attr']) + decktype['maxcard'] +  1):
             
-            # 當遇到非數字則忽略、表頭符號則結束
-            if '#' in data_list[x] or '!' in data_list[x]: break
-            elif not data_list[x].isnumeric(): continue
-
-            if data_list[x] not in card_bucket:
-                card_bucket[data_list[x]] = 1
-            else:
-                card_bucket[data_list[x]] += 1
-
-        card_bucket = dict(sorted(card_bucket.items()))
-
-        for cid in card_bucket:
-            # 從資料庫查找卡名
-            cur = conn.cursor()
-            cur.execute("select CardName from Cards \
-                where Passcode=(?) limit 1",("%08d"%int(cid),))
-            fetch = cur.fetchone()
-
-            cardname = "??"
-
-            if fetch != None: cardname = str(fetch[0])
-
-            # 串接連續字串
-            output_str += f'{"%08d"%int(cid)}: {cardname} * {card_bucket[cid]}\n'
-        
-        
-        conn.close()
-        #回傳連續字串
-        return output_str
-            
+    data_list = ydk_data.splitlines()
     
-    
-
     @bot.component(btn_save)
     async def savedeck_res(ctx: interactions.CommandContext):
-        data_list = ydk_data.splitlines()
+        
 
         save_data = ''
 
@@ -412,7 +385,7 @@ async def makedeck_response(ctx: interactions.CommandContext,ydk_title: str, ydk
 
     embed_content = [interactions.EmbedField(
         name = DECK_DICT[d]['name'],
-        value = get_deck_display_str(DECK_DICT[d]),
+        value = get_deck_display_str(DECK_DICT[d],ydk_data),
         inline = False,
     ) for d in DECK_DICT]
 
