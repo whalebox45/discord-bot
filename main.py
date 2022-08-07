@@ -151,17 +151,22 @@ def get_deck_display_str(decktype: dict, deck_data: str):
 
 
 
+class DeckEmptyError(Exception):
+    pass
+
+class DeckOutOfLimitError(Exception):
+    pass
+
 
 
 @bot.command(name='my_deck')
 async def my_deck(ctx: interactions.CommandContext):
     pass
 
+@interactions.autodefer(delay=20)
 @my_deck.subcommand(name="list",description="檢視在機器人上已儲存的牌組(Beta)")
 async def listdeck(ctx: interactions.CommandContext):
 
-    class DeckEmptyError(Exception):
-        pass
 
     conn = psycopg2.connect(DB_URL)
     cur = conn.cursor()
@@ -174,24 +179,22 @@ async def listdeck(ctx: interactions.CommandContext):
         if not fetch: raise DeckEmptyError
 
         option_str = ""
-        for x in fetch:
-            option_str += str(x[0]) + ': ' + str(x[2]) + '\n'
+        for i, x in enumerate(fetch):
+            option_str += str(i+1) + ': ' + str(x[2]) + '\n'
 
         deck_menu = interactions.SelectMenu(
             options=[
                 interactions.SelectOption(
-                    label= str(x[0]) + ': ' + str(x[2]),
+                    label= str(i+1) + ': ' + str(x[2]),
                     value=x[0],
                 )
-                for x in fetch
-            ],
+                for i, x in enumerate(fetch) ],
             custom_id="deck_select"
         )
 
-        await ctx.send('請選擇已儲存的牌組')
-        await ctx.send('```\n'+option_str+'\n```', components=deck_menu)
+        await ctx.send('請選擇已儲存的牌組'+'```\n'+option_str+'\n```', components=deck_menu,ephemeral=True)
     except DeckEmptyError:
-        await ctx.send('你沒有存任何牌組喔')
+        await ctx.send('你沒有存任何牌組喔',ephemeral=True)
 
 @bot.component("deck_select")
 async def deck_select(ctx, value):
@@ -203,7 +206,7 @@ async def deck_select(ctx, value):
 
     conn.close()
 
-    print(fetch)
+    # print(fetch)
 
     b64_deck_bytes = fetch[1].encode('ascii')
     load_data_bytes = base64.b64decode(b64_deck_bytes)
@@ -223,6 +226,15 @@ async def deck_select(ctx, value):
         fields=embed_content,
     )
 
+    await ctx.edit(components=interactions.SelectMenu(
+            options=[
+                interactions.SelectOption(
+                    label='-',
+                    value=0,
+                )],
+            custom_id="deck_select",
+            disabled=True
+        ))
     await ctx.send(content="這是你所要檢視的牌組",embeds=ebd)
 
 
@@ -230,8 +242,7 @@ async def deck_select(ctx, value):
 @my_deck.subcommand(name='create',description="輸入ydk內容以建立牌組(Beta)")
 async def createdeck(ctx: interactions.CommandContext):
 
-    class DeckOutOfLimitError(Exception):
-        pass
+
 
     MAX_DECK_COUNT = 5
 
@@ -272,27 +283,29 @@ async def createdeck(ctx: interactions.CommandContext):
         )
         await ctx.popup(modal)
     except DeckOutOfLimitError:
-        print("too many decks")
+        # print("too many decks")
         await ctx.send("你已儲存太多的牌組了",ephemeral=True)
 
-btn_nosave = interactions.Button(
-    style=interactions.ButtonStyle.SECONDARY,
-    label='否',
-    custom_id="nosavedeck",
-)
-btn_save = interactions.Button(
-    style=interactions.ButtonStyle.PRIMARY,
-    label="是",
-    custom_id="savedeck",
-)
-
-
+@interactions.autodefer(delay=20)
 @bot.modal("makedeck_form")
 async def makedeck_response(ctx: interactions.CommandContext,ydk_title: str, ydk_data:str):
 
     if ydk_title == "": ydk_title = "Unnamed"
             
     data_list = ydk_data.splitlines()
+
+
+    btn_nosave = interactions.Button(
+        style=interactions.ButtonStyle.SECONDARY,
+        label='否',
+        custom_id="nosavedeck",
+    )
+    btn_save = interactions.Button(
+        style=interactions.ButtonStyle.PRIMARY,
+        label="是",
+        custom_id="savedeck",
+    )
+
     
     @bot.component(btn_save)
     async def savedeck_res(ctx: interactions.CommandContext):
@@ -357,7 +370,7 @@ async def makedeck_response(ctx: interactions.CommandContext,ydk_title: str, ydk
             ),]
         ))
 
-        await ctx.send('牌組已儲存')
+        await ctx.send('牌組已儲存',ephemeral=True)
         
 
 
@@ -380,7 +393,7 @@ async def makedeck_response(ctx: interactions.CommandContext,ydk_title: str, ydk
                 disabled=True,
             ),]
         ))
-        await ctx.send('已取消儲存')
+        await ctx.send('已取消儲存',ephemeral=True)
         
 
     embed_content = [interactions.EmbedField(
@@ -394,18 +407,167 @@ async def makedeck_response(ctx: interactions.CommandContext,ydk_title: str, ydk
         title=ydk_title,
         fields=embed_content,
     )
- 
+
+    
+
     btn_row = interactions.ActionRow(components=[btn_nosave,btn_save])
 
     await ctx.send(content="這是你建立的牌組，請問要儲存嗎？",embeds=ebd,components=btn_row, ephemeral=True)
 
 
 
-
-@my_deck.subcommand(name='delete')
+@my_deck.subcommand(name='delete',description="刪除在機器人上所建立的牌組(Beta)")
 async def deletedeck(ctx: interactions.CommandContext):
-    await ctx.send('還沒寫，欲刪除請洽機器人作者')
+    conn = psycopg2.connect(DB_URL)
+    cur = conn.cursor()
+
+    cur.execute("""select id, user_id, deck_name from userdeck where user_id = %s ;""",(int(ctx.user.id),))
+    try:
+        fetch = cur.fetchall()
+        conn.close()
+        
+        if not fetch: raise DeckEmptyError
+
+        option_str = ""
+        for i, x in enumerate(fetch):
+            option_str += str(i+1) + ': ' + str(x[2]) + '\n'
+
+        deck_menu = interactions.SelectMenu(
+            options=[
+                interactions.SelectOption(
+                    label= str(i+1) + ': ' + str(x[2]),
+                    value=x[0],
+                )
+                for i, x in enumerate(fetch)
+            ],
+            custom_id="deck_delete_select"
+        )
+
+        await ctx.send('請選擇欲刪除的牌組'+'```\n'+option_str+'\n```', components=deck_menu,ephemeral=True)
+    except DeckEmptyError:
+        await ctx.send('你沒有存任何牌組喔',ephemeral=True)
     
+
+
+@bot.component("deck_delete_select")
+async def deck_delete_select(ctx, value):
+
+    btn_nodelete = interactions.Button(
+        style=interactions.ButtonStyle.SECONDARY,
+        label='否',
+        custom_id="nodeletedeck",
+    )
+
+    btn_delete = interactions.Button(
+        style=interactions.ButtonStyle.DANGER,
+        label="是",
+        custom_id="deletedeck",
+    )
+
+
+    conn = psycopg2.connect(DB_URL)
+    cur = conn.cursor()
+
+    cur.execute(""" select id, deck_data, deck_name from userdeck where id = %s ;""",(str(value[0]),))
+    fetch = cur.fetchone()
+
+    conn.close()
+
+    # print(fetch)
+
+
+    b64_deck_bytes = fetch[1].encode('ascii')
+    load_data_bytes = base64.b64decode(b64_deck_bytes)
+    load_data = load_data_bytes.decode('ascii')
+
+    ydk_title = fetch[2]
+
+    
+    @bot.component(btn_delete)
+    async def delete_res(ctx):
+
+        await ctx.edit(components=interactions.ActionRow(
+                components=[
+                interactions.Button(
+                    style=interactions.ButtonStyle.SECONDARY,
+                    label='否',
+                    custom_id="nodeletedeck",
+                    disabled=True,
+                ),
+                interactions.Button(
+                    style=interactions.ButtonStyle.DANGER,
+                    label="是",
+                    custom_id="deletedeck",
+                    disabled=True,
+                ),]
+            ))
+        
+        conn = psycopg2.connect(DB_URL)
+
+        try:
+            cur = conn.cursor()
+
+            
+            cur.execute("""delete from userdeck where id = %s ;""",
+            (str(value[0]),))
+            conn.commit()
+
+            await ctx.send('牌組已刪除',ephemeral=True)
+        except:
+            conn.rollback()
+            await ctx.send('刪除失敗',ephemeral=True)
+        finally:
+            conn.close()
+
+        
+
+    @bot.component(btn_nodelete)
+    async def no_delete_res(ctx):
+        await ctx.edit(components=interactions.ActionRow(
+            components=[
+            interactions.Button(
+                style=interactions.ButtonStyle.SECONDARY,
+                label='否',
+                custom_id="nodeletedeck",
+                disabled=True,
+            ),
+            interactions.Button(
+                style=interactions.ButtonStyle.DANGER,
+                label="是",
+                custom_id="deletedeck",
+                disabled=True,
+            ),]
+        ))
+        await ctx.send('已取消刪除',ephemeral=True)
+
+
+
+    btn_row = interactions.ActionRow(components=[btn_nodelete,btn_delete])
+
+    embed_content = [interactions.EmbedField(
+        name = DECK_DICT[d]['name'],
+        value = get_deck_display_str(DECK_DICT[d],load_data),
+        inline = False,
+    ) for d in DECK_DICT]
+
+    ebd = interactions.Embed(
+        title=ydk_title,
+        fields=embed_content,
+    )
+
+
+    await ctx.edit(components=interactions.SelectMenu(
+            options=[
+                interactions.SelectOption(
+                    label='-',
+                    value=0,
+                )],
+            custom_id="deck_delete_select",
+            disabled=True
+        ))
+    await ctx.send(content="這是你所要刪除的牌組，確定要刪除嗎",embeds=ebd,components=btn_row,ephemeral=True)
+
+
 
 
 @bot.command()
