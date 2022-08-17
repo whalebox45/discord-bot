@@ -21,6 +21,45 @@ CARD_DB_LOCATION = "decks/card.db"
 
 bot = interactions.Client(token=TOKEN)
 
+
+class Lot:
+    def __init__(self,name:str,weight:int):
+        self.name = name
+        self.weight = weight
+
+LOT_LIST = [
+    Lot("⭕",40),
+    Lot("❌",40),
+    Lot("🤔",20)
+]   
+
+@bot.command(
+    name="lot",
+    description="抽籤；是⭕：40% 機率、否❌：40% 機率、再想想🤔：20% 機率 (Alpha)"
+)
+async def lot_command(ctx: interactions.CommandContext):
+    
+    lot_weight_list = [l.weight for l in LOT_LIST]
+    LOT_TOTAL_WEIGHT = sum(lot_weight_list)
+    
+    accum_weight = [0] * len(LOT_LIST)
+
+    for i, l in enumerate(lot_weight_list):
+        accum_weight[i] = accum_weight[i-1] + l
+    
+    outcome = random.randrange(LOT_TOTAL_WEIGHT)
+    lot_result = "抽籤錯誤"
+    
+    for i, c in enumerate(accum_weight):
+        if outcome < c:
+            lot_result = LOT_LIST[i].name
+            break    
+    
+    await ctx.send(lot_result)
+
+
+
+
 # 各個牌組區的最大張數
 MAINDECK_MAX = 60
 EXTRADECK_MAX = 15
